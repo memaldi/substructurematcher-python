@@ -1,7 +1,7 @@
 from os import listdir
 from alignapy import *
 from requests.exceptions import MissingSchema
-
+import datetime
 from mongoengine import *
 
 SUBS_DIR='/home/mikel/doctorado/subgraphs/subs/'
@@ -41,7 +41,10 @@ class Edge():
         self.target = target
         self.name = name
 
-
+def blacklist_add(uri):
+    dt = datetime.datetime.now()
+    bl = BlackList(ontology=uri, last_access=dt)
+    bl.save()
 
 def get_base(uri):
     if '#' in uri:
@@ -87,7 +90,7 @@ blacklist = []
 align_dict = {}
 for o1 in ontology_list:
     for o2 in ontology_list:
-        if o1 not in blacklist and o2 not in blacklist and o1 != o2:
+        if len(BlackList.objects(ontology=o1)) <= 0 and len(BlackList.objects(ontology=o2)) <= 0 and o1 != o2:
             proceed = False
             if o1 not in align_dict:
                 proceed = True
@@ -115,15 +118,18 @@ for o1 in ontology_list:
                     align_dict[o1][o2]['EditDistNameAlignment'] = ap
                 except UriNotFound as e:
                     blacklist.append(e.uri)
+                    blacklist_add(e.uri)
                 except MissingSchema as e:
                     #print 'Incorrect schema'
                     print e.args
                 except UnsupportedContent as e:
                     print e
                     blacklist.append(e.uri)
+                    blacklist_add(e.uri)
                 except IncorrectMimeType as e:
                     print e
                     blacklist.append(e.uri)
+                    blacklist_add(e.uri)
                 except Exception as e:
                     pass
     print blacklist
