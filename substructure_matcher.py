@@ -2,7 +2,22 @@ from os import listdir
 from alignapy import *
 from requests.exceptions import MissingSchema
 
+from mongoengine import *
+
 SUBS_DIR='/home/mikel/doctorado/subgraphs/subs/'
+
+class MongoAlign(Document):
+    source_onto = StringField(required=True)
+    target_onto = StringField(required=True)
+    source_obj = StringField(required=True)
+    target_obj = StringField(required=True)
+    align_class = StringField(required=True)
+    score = FloatField(required=True)
+    
+class BlackList(Document):
+    ontology = StringField(required=True)
+    last_access = DateTimeField()
+
 
 class Graph():
     def __init__(self):
@@ -37,6 +52,8 @@ def get_base(uri):
         for i in xrange(len(chunks) - 1):
             base += chunks[i] + '/'
         return base.replace('<', '')
+
+connect('alignment')
 
 graph_dict = {}
 ontology_list = []
@@ -88,9 +105,14 @@ for o1 in ontology_list:
                     ap.init(o1, o2)
                     ap.align()
                     print 'cells', len(ap.cell_list)
-                    '''for cell in ap.cell_list:
-                        print cell.prop1, cell.prop2, cell.measure'''
-                    align_dict[o1][o2]['NameAndPropertyAlignment'] = ap
+                    for cell in ap.cell_list:
+                        #print str(cell.prop1[0]), str(cell.prop2[0]), cell.measure
+                        try:
+                            mongo = MongoAlign(source_onto=o1, target_onto=o2, source_obj=str(cell.prop1[0]), target_obj=str(cell.prop2[0]), align_class='EditDistNameAlignment', score=cell.measure)
+                            mongo.save()
+                        except Exception as e:
+                            print e
+                    align_dict[o1][o2]['EditDistNameAlignment'] = ap
                 except UriNotFound as e:
                     blacklist.append(e.uri)
                 except MissingSchema as e:
