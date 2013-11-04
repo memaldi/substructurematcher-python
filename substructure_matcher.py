@@ -91,18 +91,10 @@ align_dict = {}
 for o1 in ontology_list:
     for o2 in ontology_list:
         if len(BlackList.objects(ontology=o1)) <= 0 and len(BlackList.objects(ontology=o2)) <= 0 and o1 != o2:
-            proceed = False
-            if o1 not in align_dict:
-                proceed = True
-                align_dict[o1] = {}
-                align_dict[o1][o2] = {}
-            elif o2 not in align_dict[o1]:
-                proceed = True
-                align_dict[o1][o2] = {}
-                
-            if proceed:
-                print o1, o2
-                #print align_dict
+            print o1, o2
+            #print align_dict
+            alignment = MongoAlign.objects(source_onto=o1, target_onto=o2, align_class='EditDistNameAlignment')
+            if len(alignment) <= 0:
                 ap = EditDistNameAlignment()
                 try:
                     ap.init(o1, o2)
@@ -115,20 +107,16 @@ for o1 in ontology_list:
                             mongo.save()
                         except Exception as e:
                             print e
-                    align_dict[o1][o2]['EditDistNameAlignment'] = ap
                 except UriNotFound as e:
-                    blacklist.append(e.uri)
                     blacklist_add(e.uri)
                 except MissingSchema as e:
                     #print 'Incorrect schema'
                     print e.args
                 except UnsupportedContent as e:
                     print e
-                    blacklist.append(e.uri)
                     blacklist_add(e.uri)
                 except IncorrectMimeType as e:
                     print e
-                    blacklist.append(e.uri)
                     blacklist_add(e.uri)
                 except Exception as e:
                     pass
