@@ -1,10 +1,12 @@
 from os import listdir
+import alignapy
 from alignapy import *
 from requests.exceptions import MissingSchema
 import datetime
 from mongoengine import *
 
 SUBS_DIR='/home/mikel/doctorado/subgraphs/subs/'
+ALIGN_LIST=['NameAndPropertyAlignment', 'StringDistAlignment', 'NameEqAlignment', 'EditDistNameAlignment', 'SMOANameAlignment', 'SubsDistNameAlignment', 'JWNLAlignment']
 
 class MongoAlign(Document):
     source_onto = StringField(required=True)
@@ -86,16 +88,16 @@ for sub in listdir(SUBS_DIR):
     graph_dict[sub] = graph
     f.close()
 
-blacklist = []
-align_dict = {}
 for o1 in ontology_list:
     for o2 in ontology_list:
         if len(BlackList.objects(ontology=o1)) <= 0 and len(BlackList.objects(ontology=o2)) <= 0 and o1 != o2:
-            print o1, o2
+            #print o1, o2
             #print align_dict
-            alignment = MongoAlign.objects(source_onto=o1, target_onto=o2, align_class='EditDistNameAlignment')
+            for align_class in ALIGN_LIST:
+                alignment = MongoAlign.objects(source_onto=o1, target_onto=o2, align_class=align_class)
             if len(alignment) <= 0:
-                ap = EditDistNameAlignment()
+                print 'Creating alignment between %s and %s using %s' % (o1, o2, align_class) 
+                ap = getattr(alignapy, align_class)()
                 try:
                     ap.init(o1, o2)
                     ap.align()
@@ -120,7 +122,6 @@ for o1 in ontology_list:
                     blacklist_add(e.uri)
                 except Exception as e:
                     pass
-    print blacklist
                 
 
 '''for key1 in graph_dict:
