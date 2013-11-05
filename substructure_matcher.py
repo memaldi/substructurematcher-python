@@ -7,7 +7,7 @@ from mongoengine import *
 import multiprocessing
 import uuid
 import os
-
+import copy
 
 SUBS_DIR='/home/mikel/doctorado/subgraphs/subset/'
 OUT_DIR='/home/mikel/doctorado/subgraphs/matcher-python'
@@ -193,12 +193,11 @@ for source in sources:
 for graph1 in graph_dict:
     for graph2 in graph_dict:
         if graph1 != graph2:
-            new_graph1 = graph_dict[graph1]
-            new_graph2 = graph_dict[graph2]
+            new_graph1 = copy.deepcopy(graph_dict[graph1])
+            new_graph2 = copy.deepcopy(graph_dict[graph2])
             for vertex1 in graph_dict[graph1].vertex_list:
                 for vertex2 in graph_dict[graph2].vertex_list:
-                    if vertex1 != vertex2:
-                        #print vertex1.vertex_name, vertex2.vertex_name
+                    if vertex1.vertex_name != vertex2.vertex_name:
                         align = MongoAlign.objects(source_obj=vertex1.vertex_name, target_obj=vertex2.vertex_name, align_class='NameEqAlignment')
                         if len(align) > 0:
                             for al in align:
@@ -206,7 +205,7 @@ for graph1 in graph_dict:
                                     code = str(uuid.uuid4())
                                     new_graph1.replace_vertex(vertex1.vertex_name, code)
                                     new_graph2.replace_vertex(vertex2.vertex_name, code)
-                                    break
+                                    #break
                         else:
                             align = AvgAlign.objects(source_obj=vertex1.vertex_name, target_obj=vertex2.vertex_name)
                             if len(align) > 0:
@@ -215,10 +214,10 @@ for graph1 in graph_dict:
                                         code = str(uuid.uuid4())
                                         new_graph1.replace_vertex(vertex1.vertex_name, code)
                                         new_graph2.replace_vertex(vertex2.vertex_name, code)
-                                        break
+                                        #break
             for edge1 in graph_dict[graph1].edge_list:
                 for edge2 in graph_dict[graph2].edge_list:
-                    if edge1 != edge2:
+                    if edge1.name != edge2.name:
                         align = MongoAlign.objects(source_obj=edge1.name, target_obj=edge2.name, align_class='NameEqAlignment')
                         if len(align) > 0:
                             for al in align:
@@ -226,7 +225,7 @@ for graph1 in graph_dict:
                                     code = str(uuid.uuid4())
                                     new_graph1.replace_edges(edge1.name, code)
                                     new_graph2.replace_edges(edge2.name, code)
-                                    break
+                                    #break
                         else:
                             align = AvgAlign.objects(source_obj=edge1.name, target_obj=edge2.name)
                             if len(align) > 0:
@@ -235,7 +234,7 @@ for graph1 in graph_dict:
                                         code = str(uuid.uuid4())
                                         new_graph1.replace_edges(edge1.name, code)
                                         new_graph2.replace_edges(edge2.name, code)
-                                        break
+                                        #break
                                         
             
             output_dir = '%s/%s-%s/' % (OUT_DIR, graph1, graph2)
@@ -244,14 +243,12 @@ for graph1 in graph_dict:
             
             
             os.mkdir(output_dir)
-            
             f = open(output_file1, 'w')
             for vertex in new_graph1.vertex_list:
                 f.write('v %s %s\n' % (vertex.vertex_id, vertex.vertex_name))
             for edge in new_graph1.edge_list:
                 f.write('d %s %s %s\n' % (edge.source, edge.target, edge.name))
             f.close()
-            
             f = open(output_file2, 'w')
             for vertex in new_graph2.vertex_list:
                 f.write('v %s %s\n' % (vertex.vertex_id, vertex.vertex_name))
