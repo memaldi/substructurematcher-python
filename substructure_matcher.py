@@ -12,7 +12,7 @@ import copy
 SUBS_DIR='/home/mikel/doctorado/subgraphs/subset/'
 OUT_DIR='/home/mikel/doctorado/subgraphs/matcher-python'
 #ALIGN_LIST=['NameAndPropertyAlignment', 'StringDistAlignment', 'NameEqAlignment', 'EditDistNameAlignment', 'SMOANameAlignment', 'SubsDistNameAlignment', 'JWNLAlignment']
-ALIGN_LIST=['NameAndPropertyAlignment', 'NameEqAlignment', 'EditDistNameAlignment', 'SMOANameAlignment', 'SubsDistNameAlignment']
+ALIGN_LIST=['NameAndPropertyAlignment', 'NameEqAlignment', 'EditDistNameAlignment', 'SMOANameAlignment', 'SubsDistNameAlignment', 'JWNLAlignment']
 POOL_SIZE=10
 THRESHOLD=0.7
 
@@ -122,6 +122,20 @@ def process((ap, o1, o2, align_class)):
         pass
 
 
+def process_avg(source):
+    targets = MongoAlign.objects(source_obj=source).distinct(field="target_obj")
+    for target in targets:
+        avg_align = AvgAlign.objects(source_obj=source, target_obj=target)
+        if len(avg_align) <= 0:
+            results = MongoAlign.objects(source_obj=source, target_obj=target)
+            total_score = 0
+            for result in results:
+                if result.align_class not in ['NameEqAlignment', 'StringDistAlignment']:
+                    total_score += result.score
+            avg_score = total_score / (len(ALIGN_LIST) - 1)
+            avg_align = AvgAlign(source_obj=source, target_obj=target, avg_score=avg_score)
+            avg_align.save()
+
 connect('alignment')
 
 graph_dict = {}
@@ -176,19 +190,13 @@ sources = MongoAlign.objects().distinct(field="source_obj")
 print 'Calculating Averages...'
 
 # TODO: Map
-for source in sources:
-    targets = MongoAlign.objects(source_obj=source).distinct(field="target_obj")
-    for target in targets:
-        avg_align = AvgAlign.objects(source_obj=source, target_obj=target)
-        if len(avg_align) <= 0:
-            results = MongoAlign.objects(source_obj=source, target_obj=target)
-            total_score = 0
-            for result in results:
-                if result.align_class not in ['NameEqAlignment', 'StringDistAlignment']:
-                    total_score += result.score
-            avg_score = total_score / (len(ALIGN_LIST) - 1)
-            avg_align = AvgAlign(source_obj=source, target_obj=target, avg_score=avg_score)
-            avg_align.save()
+source_list = []
+#print type(sources), dir(sources)
+#for source in sources:
+#    source_list.append(source)
+    
+#pool.map(process_avg, source_list)
+pool.map(process_avg, sources)
 
 for graph1 in graph_dict:
     for graph2 in graph_dict:
