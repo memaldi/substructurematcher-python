@@ -5,25 +5,33 @@ from requests.exceptions import MissingSchema
 import datetime
 from mongoengine import *
 import multiprocessing
+import uuid
+import os
 
 
-
-SUBS_DIR='/home/mikel/doctorado/subgraphs/subs/'
+SUBS_DIR='/home/mikel/doctorado/subgraphs/subset/'
+OUT_DIR='/home/mikel/doctorado/subgraphs/matcher-python'
 #ALIGN_LIST=['NameAndPropertyAlignment', 'StringDistAlignment', 'NameEqAlignment', 'EditDistNameAlignment', 'SMOANameAlignment', 'SubsDistNameAlignment', 'JWNLAlignment']
-ALIGN_LIST=['JWNLAlignment']
+ALIGN_LIST=['NameAndPropertyAlignment', 'NameEqAlignment', 'EditDistNameAlignment', 'SMOANameAlignment', 'SubsDistNameAlignment']
 POOL_SIZE=10
+THRESHOLD=0.7
 
 class MongoAlign(Document):
     source_onto = StringField(required=True)
     target_onto = StringField(required=True)
-    source_obj = StringField(required=True)
-    target_obj = StringField(required=True)
+    source_obj = StringField()
+    target_obj = StringField()
     align_class = StringField(required=True)
     score = FloatField(required=True)
     
 class BlackList(Document):
     ontology = StringField(required=True)
     last_access = DateTimeField()
+    
+class AvgAlign(Document):
+    source_obj = StringField(required=True)
+    target_obj = StringField(required=True)
+    avg_score = FloatField(required=True)
 
 
 class Graph():
@@ -36,11 +44,23 @@ class Graph():
         
     def add_edge(self, edge):
         self.edge_list.append(edge)
+        
+    def replace_vertex(self, old, new):
+        for n, i in enumerate(self.vertex_list):
+            if i.vertex_name == old:
+                new_vertex = Vertex(i.vertex_id, new)
+                self.vertex_list[n] = new_vertex
+    
+    def replace_edges(self, old, new):
+        for n, i in enumerate(self.edge_list):
+            if i.name == old:
+                new_edge = Edge(i.source, i.target, new)
+                self.edge_list[n] = new_edge
 
 class Vertex():
     def __init__(self, vertex_id, name):
         self.vertex_id = vertex_id
-        self.vertex_id = name
+        self.vertex_name = name
 
 class Edge():
     def __init__(self, source, target, name):
@@ -68,16 +88,25 @@ def process((ap, o1, o2, align_class)):
         if len(BlackList.objects(ontology=o1)) <= 0 and len(BlackList.objects(ontology=o2)) <= 0 and o1 != o2:
             alignment = MongoAlign.objects(source_onto=o1, target_onto=o2, align_class=align_class)
             if len(alignment) <= 0:
+                print 'Creating alignment between %s and %s using %s' % (o1, o2, align_class)
                 ap.init(o1, o2)
                 ap.align()
                 print 'cells', len(ap.cell_list)
-                for cell in ap.cell_list:
-                    #print str(cell.prop1[0]), str(cell.prop2[0]), cell.measure
+                if len(ap.cell_list) == 0:
                     try:
-                        mongo = MongoAlign(source_onto=o1, target_onto=o2, source_obj=str(cell.prop1[0]), target_obj=str(cell.prop2[0]), align_class=align_class, score=cell.measure)
+                        mongo = MongoAlign(source_onto=o1, target_onto=o2, source_obj=None, target_obj=None, align_class=align_class, score=0.0)
                         mongo.save()
                     except Exception as e:
                         print e
+                else:
+                    for cell in ap.cell_list:
+                        if str(cell.prop1[0]) == 'http://swrc.ontoware.org/ontology#editor' and str(cell.prop2[0]) == 'http://purl.org/ontology/bibo/editor':
+                            print str(cell.prop1[0]), str(cell.prop2[0]), cell.measure
+                        try:
+                            mongo = MongoAlign(source_onto=o1, target_onto=o2, source_obj=str(cell.prop1[0]), target_obj=str(cell.prop2[0]), align_class=align_class, score=cell.measure)
+                            mongo.save()
+                        except Exception as e:
+                            print e
     except UriNotFound as e:
         blacklist_add(e.uri)
     except MissingSchema as e:
@@ -104,7 +133,7 @@ for sub in listdir(SUBS_DIR):
         if line.find('v') == 0:
             chunks = line.split(' ')
             vertex_id = chunks[1]
-            vertex_name = chunks[2].replace('\n', '')
+            vertex_name = chunks[2].replace('\n', '').replace('<', '').replace('>', '')
             base = get_base(vertex_name)
             if base not in ontology_list:
                 ontology_list.append(base)
@@ -114,7 +143,7 @@ for sub in listdir(SUBS_DIR):
             chunks = line.split(' ')
             source = chunks[1]
             target = chunks[2]
-            name = chunks[3].replace('"', '')
+            name = chunks[3].replace('"', '').replace('<', '').replace('>', '')
             base = get_base(name)
             if base not in ontology_list:
                 ontology_list.append(base)
@@ -140,11 +169,94 @@ for o1 in ontology_list:
 pool = multiprocessing.Pool(POOL_SIZE)
 result = pool.map(process, ap_list)         
 
+print 'End of map...'
 
-'''for key1 in graph_dict:
-    g1 = graph_dict[key1]
-    for key2 in graph_dict:
-        if key1 != key2:
-            g2 = graph_dict[key2]
-            for 
-'''
+sources = MongoAlign.objects().distinct(field="source_obj")
+
+print 'Calculating Averages...'
+
+# TODO: Map
+for source in sources:
+    targets = MongoAlign.objects(source_obj=source).distinct(field="target_obj")
+    for target in targets:
+        avg_align = AvgAlign.objects(source_obj=source, target_obj=target)
+        if len(avg_align) <= 0:
+            results = MongoAlign.objects(source_obj=source, target_obj=target)
+            total_score = 0
+            for result in results:
+                if result.align_class not in ['NameEqAlignment', 'StringDistAlignment']:
+                    total_score += result.score
+            avg_score = total_score / (len(ALIGN_LIST) - 1)
+            avg_align = AvgAlign(source_obj=source, target_obj=target, avg_score=avg_score)
+            avg_align.save()
+
+for graph1 in graph_dict:
+    for graph2 in graph_dict:
+        if graph1 != graph2:
+            new_graph1 = graph_dict[graph1]
+            new_graph2 = graph_dict[graph2]
+            for vertex1 in graph_dict[graph1].vertex_list:
+                for vertex2 in graph_dict[graph2].vertex_list:
+                    if vertex1 != vertex2:
+                        #print vertex1.vertex_name, vertex2.vertex_name
+                        align = MongoAlign.objects(source_obj=vertex1.vertex_name, target_obj=vertex2.vertex_name, align_class='NameEqAlignment')
+                        if len(align) > 0:
+                            for al in align:
+                                if al.score == 1:
+                                    code = str(uuid.uuid4())
+                                    new_graph1.replace_vertex(vertex1.vertex_name, code)
+                                    new_graph2.replace_vertex(vertex2.vertex_name, code)
+                                    break
+                        else:
+                            align = AvgAlign.objects(source_obj=vertex1.vertex_name, target_obj=vertex2.vertex_name)
+                            if len(align) > 0:
+                                for al in align:
+                                    if al.avg_score > THRESHOLD:
+                                        code = str(uuid.uuid4())
+                                        new_graph1.replace_vertex(vertex1.vertex_name, code)
+                                        new_graph2.replace_vertex(vertex2.vertex_name, code)
+                                        break
+            for edge1 in graph_dict[graph1].edge_list:
+                for edge2 in graph_dict[graph2].edge_list:
+                    if edge1 != edge2:
+                        align = MongoAlign.objects(source_obj=edge1.name, target_obj=edge2.name, align_class='NameEqAlignment')
+                        if len(align) > 0:
+                            for al in align:
+                                if al.score == 1:
+                                    code = str(uuid.uuid4())
+                                    new_graph1.replace_edges(edge1.name, code)
+                                    new_graph2.replace_edges(edge2.name, code)
+                                    break
+                        else:
+                            align = AvgAlign.objects(source_obj=edge1.name, target_obj=edge2.name)
+                            if len(align) > 0:
+                                for al in align:
+                                    if al.avg_score > THRESHOLD:
+                                        code = str(uuid.uuid4())
+                                        new_graph1.replace_edges(edge1.name, code)
+                                        new_graph2.replace_edges(edge2.name, code)
+                                        break
+                                        
+            
+            output_dir = '%s/%s-%s/' % (OUT_DIR, graph1, graph2)
+            output_file1 = '%s/%s-%s/%s' % (OUT_DIR, graph1, graph2, graph1)
+            output_file2 = '%s/%s-%s/%s' % (OUT_DIR, graph1, graph2, graph2)
+            
+            
+            os.mkdir(output_dir)
+            
+            f = open(output_file1, 'w')
+            for vertex in new_graph1.vertex_list:
+                f.write('v %s %s\n' % (vertex.vertex_id, vertex.vertex_name))
+            for edge in new_graph1.edge_list:
+                f.write('d %s %s %s\n' % (edge.source, edge.target, edge.name))
+            f.close()
+            
+            f = open(output_file2, 'w')
+            for vertex in new_graph2.vertex_list:
+                f.write('v %s %s\n' % (vertex.vertex_id, vertex.vertex_name))
+            for edge in new_graph2.edge_list:
+                f.write('d %s %s %s\n' % (edge.source, edge.target, edge.name))
+            f.close()
+            
+
