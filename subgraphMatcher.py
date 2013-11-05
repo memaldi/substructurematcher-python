@@ -39,7 +39,10 @@ csv.write(strKeys + '\n')
 for sourceKey in keys:
     newRow = sourceKey.split('.')[0]
     for targetKey in keys:
-        newRow += ',' + result_dict[sourceKey][targetKey]
+        if sourceKey == targetKey:
+            newRow += ',' + str(0)
+        else:
+            newRow += ',' + result_dict[sourceKey][targetKey]
     print newRow
     csv.write(newRow + '\n')
 
