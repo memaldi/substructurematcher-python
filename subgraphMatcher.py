@@ -12,8 +12,8 @@ OUTPUT_FILE = sys.argv[2]
 result_dict = {}
 
 for subdir in listdir(INPUT_DIR):
-    sourceG = subdir.split('-')[0]
-    targetG = subdir.split('-')[1]
+    sourceG = subdir.split('.g-')[0] + '.g'
+    targetG = subdir.split('.g-')[1]
     sourcePath = INPUT_DIR + '/' + subdir + '/' + sourceG
     if sourceG not in result_dict:
         result_dict[sourceG] = {}
@@ -25,11 +25,12 @@ for subdir in listdir(INPUT_DIR):
     value = stdout[stdout.find('Match Cost = ') + len('Match Cost = '):stdout.find('\n')]
     result_dict[sourceG][targetG] = value.split('.')[0]
     
-print result_dict
+#print result_dict
 
 csv = open(OUTPUT_FILE, 'w')
 
 keys = result_dict.keys()
+keys.sort()
 strKeys = 'Datasets'
 for key in keys:
     strKeys += ',' + key.split('.')[0]
@@ -43,7 +44,7 @@ for sourceKey in keys:
             newRow += ',' + str(0)
         else:
             newRow += ',' + result_dict[sourceKey][targetKey]
-    print newRow
+    #print newRow
     csv.write(newRow + '\n')
 
 csv.close()
