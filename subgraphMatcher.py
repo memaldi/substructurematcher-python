@@ -32,11 +32,12 @@ for subdir in listdir(INPUT_DIR):
             total2 += 1
     f.close()
     #if sourcePath != targetPath:
-    proc = subprocess.Popen([SUBDUE_DIR + "gm", sourcePath, targetPath], stdout=subprocess.PIPE)
-    stdout = proc.stdout.read()
-    value = stdout[stdout.find('Match Cost = ') + len('Match Cost = '):stdout.find('\n')]
-    normalized_cost = float(value.split('.')[0]) / (total1 + total2)
-    result_dict[sourceG][targetG] = normalized_cost
+    if total > 1:
+        proc = subprocess.Popen([SUBDUE_DIR + "gm", sourcePath, targetPath], stdout=subprocess.PIPE)
+        stdout = proc.stdout.read()
+        value = stdout[stdout.find('Match Cost = ') + len('Match Cost = '):stdout.find('\n')]
+        normalized_cost = float(value.split('.')[0]) / (total1 + total2)
+        result_dict[sourceG][targetG] = normalized_cost
     
 #print result_dict
 
