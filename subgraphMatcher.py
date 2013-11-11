@@ -15,15 +15,28 @@ for subdir in listdir(INPUT_DIR):
     sourceG = subdir.split('.g-')[0] + '.g'
     targetG = subdir.split('.g-')[1]
     sourcePath = INPUT_DIR + '/' + subdir + '/' + sourceG
+    f = open(sourcePath, 'r')
+    total1 = 0
+    for line in f:
+        if line.find('v') == 0 or line.find('d') == 0:
+            total1 += 1
+    f.close()
     if sourceG not in result_dict:
         result_dict[sourceG] = {}
     
     targetPath = INPUT_DIR + '/' + subdir + '/' + targetG
+    f = open(targetPath, 'r')
+    total2 = 0
+    for line in f:
+        if line.find('v') == 0 or line.find('d') == 0:
+            total2 += 1
+    f.close()
     #if sourcePath != targetPath:
     proc = subprocess.Popen([SUBDUE_DIR + "gm", sourcePath, targetPath], stdout=subprocess.PIPE)
     stdout = proc.stdout.read()
     value = stdout[stdout.find('Match Cost = ') + len('Match Cost = '):stdout.find('\n')]
-    result_dict[sourceG][targetG] = value.split('.')[0]
+    normalized_cost = float(value.split('.')[0]) / (total1 + total2)
+    result_dict[sourceG][targetG] = normalized_cost
     
 #print result_dict
 
@@ -43,7 +56,7 @@ for sourceKey in keys:
         if sourceKey == targetKey:
             newRow += ',' + str(0)
         else:
-            newRow += ',' + result_dict[sourceKey][targetKey]
+            newRow += ',' + str(result_dict[sourceKey][targetKey])
     #print newRow
     csv.write(newRow + '\n')
 
